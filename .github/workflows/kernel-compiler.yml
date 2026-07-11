@@ -1,14 +1,36 @@
-- name: Generate Clean Config and Inject Hardware Modules
+name: Linux Kernel Compiler
+
+on:
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout Repository
+      uses: actions/checkout@v4
+
+    - name: Install Dependencies
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y build-essential libncurses-dev bison flex libssl-dev libelf-dev bc ccache devscripts debhelper rsync
+
+    - name: Download and Extract Kernel Source
+      run: |
+        wget https://cdn.kernel.org/pub/linux/kernel/v6.x/linux-6.12.86.tar.xz
+        tar -xf linux-6.12.86.tar.xz
+
+    - name: Generate Clean Config and Inject Hardware Modules
       run: |
         cd linux-6.12.86
         # 1. تصفير الإعدادات وبناء كونفيج خام ونظيف جداً
         make alldefconfig
         
-        # --- السطور السحرية لإجبار بناء الحزم والـ Headers ---
+        # إجبار بناء الحزم والـ Headers
         scripts/config --enable CONFIG_MODULES
         scripts/config --enable CONFIG_MODULE_UNLOAD
         scripts/config --enable CONFIG_BLK_DEV_INITRD
-        # -----------------------------------------------------
 
         # 2. حماية الإقلاع والتخزين (تحويلها إلى Built-in ثابت داخل النواة)
         scripts/config --enable CONFIG_BLK_DEV_SD
@@ -53,3 +75,20 @@
         scripts/config --disable SYSTEM_REVOCATION_KEYS
         
         make olddefconfig
+
+    - name: Compile Kernel (Full Debian Packages)
+      run: |
+        cd linux-6.12.86
+        make -j$(nproc) bindeb-pkg
+
+    - name: Organize Artifacts
+      run: |
+        mkdir -p output
+        find . -maxdepth 2 -name "*.deb" -exec mv {} output/ \;
+        find .. -maxdepth 1 -name "*.deb" -exec mv {} output/ \; 2>/dev/null || true
+
+    - name: Upload Compiled Kernel
+      uses: actions/upload-artifact@v4
+      with:
+        name: custom-debian-kernel
+        path: output/
