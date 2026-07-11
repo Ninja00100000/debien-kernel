@@ -18,32 +18,30 @@ jobs:
 
     - name: Download and Extract Kernel Source
       run: |
-        # تحميل وفك ضغط النواة
         wget https://cdn.kernel.org/pub/linux/kernel/v6.x/linux-6.12.86.tar.xz
         tar -xf linux-6.12.86.tar.xz
-        
-        # البحث عن الملف المخفي ونقله مباشرة مهما كان مساره الحالي في السيرفر
-        find . -name ".config" -exec cp {} linux-6.12.86/.config \;
+        cp "$GITHUB_WORKSPACE/.config" linux-6.12.86/.config
 
     - name: Prepare and Fix Configuration
       run: |
         cd linux-6.12.86
-        # إيقاف التواقيع الرقمية التي تفشل البناء دائماً
         scripts/config --disable SYSTEM_TRUSTED_KEYS
         scripts/config --disable SYSTEM_REVOCATION_KEYS
-        # تطبيق الكونفيج
+        # إجبار الكونفيج على تفعيل خيار بناء الـ Headers مع النواة
+        scripts/config --enable CONFIG_HEADERS_INSTALL
         make olddefconfig
 
-    - name: Compile Kernel
+    - name: Compile Kernel (Full Debian Packages)
       run: |
         cd linux-6.12.86
-        # بناء الحزم
-        make -j$(nproc) bindeb-pkg
+        # استخدام الخيار الشامل لبناء حزم النواة والـ Headers معاً
+        make -j$(nproc) bindeb-pkg KDEB_PKGVERSION=1.custom
 
     - name: Organize Artifacts
       run: |
         mkdir -p output
-        find . -maxdepth 2 -name "*.deb" -exec mv {} output/ \;
+        # تجميع كافة ملفات الـ .deb الناتجة من المجلد الأب ونقلها
+        find .. -maxdepth 1 -name "*.deb" -exec mv {} output/ \;
 
     - name: Upload Compiled Kernel
       uses: actions/upload-artifact@v4
