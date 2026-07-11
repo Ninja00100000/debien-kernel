@@ -1,0 +1,45 @@
+name: Linux Kernel Compiler
+
+on:
+  workflow_dispatch: # يتيح لك تشغيل الطبخ يدوياً بضغطة زر
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout Repository
+      uses: actions/checkout@v4
+
+    - name: Install Dependencies
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y build-essential libncurses-dev bison flex libssl-dev libelf-dev bc ccache
+
+    - name: Download Kernel Source
+      run: |
+        wget https://cdn.kernel.org/pub/linux/kernel/v6.x/linux-6.12.86.tar.xz
+        tar -xf linux-6.12.86.tar.xz
+        mv linux-6.12.86/* .
+
+    - name: Prepare Configuration
+      run: |
+        # التأكد من وجود ملف الكونفيج وتجهيزه للـ make
+        cp .config .config.backup
+        make olddefconfig
+
+    - name: Compile Kernel (Turbo Mode)
+      run: |
+        # الطبخ باستخدام جميع الأنوية المتاحة في السيرفر لتسريع العملية
+        make -j$(nproc) bindeb-pkg
+
+    - name: Organize Artifacts
+      run: |
+        mkdir output
+        mv ../*.deb output/
+
+    - name: Upload Compiled Kernel
+      uses: actions/upload-artifact@v4
+      with:
+        name: custom-debian-kernel
+        path: output/
