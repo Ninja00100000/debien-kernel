@@ -20,28 +20,28 @@ jobs:
       run: |
         wget https://cdn.kernel.org/pub/linux/kernel/v6.x/linux-6.12.86.tar.xz
         tar -xf linux-6.12.86.tar.xz
-        # نقل ملف الكونفيج الذي رفعته أنت إلى داخل مجلد النواة المستخرجة مباشرة
-        cp .config linux-6.12.86/.config
+        # استخدام المسار الكامل للمستودع لضمان نسخ الملف المخفي .config بنجاح
+        cp "$GITHUB_WORKSPACE/.config" linux-6.12.86/.config
 
     - name: Prepare and Fix Configuration
       run: |
         cd linux-6.12.86
-        # إصلاح خطأ التوقيع الرقمي الشهير لكي لا يتوقف البناء
+        # تعطيل مفاتيح التوقيع الرقمي لمنع توقف البناء
         scripts/config --disable SYSTEM_TRUSTED_KEYS
         scripts/config --disable SYSTEM_REVOCATION_KEYS
-        # تطبيق الكونفيج واعتماد الخيارات الافتراضية لأي ميزة جديدة
+        # تطبيق الإعدادات واعتماد الخيارات الافتراضية للميزات الجديدة
         make olddefconfig
 
     - name: Compile Kernel (Turbo Mode)
       run: |
         cd linux-6.12.86
-        # الطبخ وحزم النواة مباشرة بصيغة .deb متوافقة مع ديبيان
+        # بناء حزم الديبان باستخدام كافة أنوية المعالج المتاحة
         make -j$(nproc) bindeb-pkg
 
     - name: Organize Artifacts
       run: |
-        mkdir output
-        # تجميع ملفات الـ .deb الناتجة من المجلد الأب ونقلها للمخرجات
+        mkdir -p output
+        # نقل كافة حزم .deb الناتجة بنجاح إلى مجلد المخرجات
         mv ../*.deb output/ 2>/dev/null || mv linux-6.12.86/../*.deb output/ || true
 
     - name: Upload Compiled Kernel
