@@ -20,26 +20,65 @@ jobs:
       run: |
         wget https://cdn.kernel.org/pub/linux/kernel/v6.x/linux-6.12.86.tar.xz
         tar -xf linux-6.12.86.tar.xz
-        # العودة إلى أمر الـ find الناجح والمضمون لاصطياد الملف المخفي ونقله
-        find . -name ".config" -exec cp {} linux-6.12.86/.config \;
 
-    - name: Prepare and Fix Configuration
+    - name: Generate Clean Config and Inject Hardware Modules
       run: |
         cd linux-6.12.86
+        # 1. تصفير الإعدادات وبناء كونفيج خام ونظيف جداً
+        make alldefconfig
+        
+        # 2. حماية الإقلاع والتخزين (تحويلها إلى Built-in ثابت داخل النواة)
+        scripts/config --enable CONFIG_BLK_DEV_SD
+        scripts/config --enable CONFIG_BLK_DEV_NVME
+        scripts/config --enable CONFIG_SATA_AHCI
+        scripts/config --enable CONFIG_ATA
+        scripts/config --enable CONFIG_EXT4_FS
+        scripts/config --enable CONFIG_MMC
+        scripts/config --enable CONFIG_MMC_SDHCI
+        scripts/config --enable CONFIG_MMC_SDHCI_PCI
+        scripts/config --enable CONFIG_DEVTMPFS
+        scripts/config --enable CONFIG_DEVTMPFS_MOUNT
+        scripts/config --enable CONFIG_TMPFS
+        
+        # 3. تفعيل معالج وجرافيك Intel الخاص بجهازك وحذف الباقي
+        scripts/config --enable CONFIG_MCORE2
+        scripts/config --disable CONFIG_CPU_SUP_AMD
+        scripts/config --enable CONFIG_DRM
+        scripts/config --enable CONFIG_DRM_I915
+        scripts/config --enable CONFIG_DRM_FBDEV_EMULATION
+        scripts/config --disable CONFIG_DRM_AMDGPU
+        scripts/config --disable CONFIG_DRM_NOUVEAU
+        scripts/config --disable CONFIG_DRM_RADEON
+        
+        # 4. تفعيل كرت الواي فاي والصوت الخاص بـ Dell
+        scripts/config --enable CONFIG_IWLWIFI
+        scripts/config --enable CONFIG_IWLMVM
+        scripts/config --enable CONFIG_DELL_LAPTOP
+        scripts/config --enable CONFIG_DELL_WMI
+        scripts/config --enable CONFIG_SND_HDA_INTEL
+        
+        # 5. تعديلات زيادة الأداء الفائقة (Performance & Low Latency)
+        scripts/config --enable CONFIG_PREEMPT_DYNAMIC
+        scripts/config --set-val CONFIG_HZ 1000
+        scripts/config --enable CONFIG_HZ_1000
+        scripts/config --disable CONFIG_HZ_250
+        scripts/config --enable CONFIG_X86_INTEL_PSTATE
+        scripts/config --enable CONFIG_IOSCHED_BFQ
+        
+        # 6. إصلاح تواقيع ديبيان للبناء بسلام
         scripts/config --disable SYSTEM_TRUSTED_KEYS
         scripts/config --disable SYSTEM_REVOCATION_KEYS
-        scripts/config --enable CONFIG_HEADERS_INSTALL
+        
         make olddefconfig
 
     - name: Compile Kernel (Full Debian Packages)
       run: |
         cd linux-6.12.86
-        make -j$(nproc) bindeb-pkg KDEB_PKGVERSION=1.custom
+        make -j$(nproc) bindeb-pkg
 
     - name: Organize Artifacts
       run: |
         mkdir -p output
-        # تجميع كافة الحزم الناتجة بشكل ديناميكي ومضمون
         find . -maxdepth 2 -name "*.deb" -exec mv {} output/ \;
         find .. -maxdepth 1 -name "*.deb" -exec mv {} output/ \; 2>/dev/null || true
 
