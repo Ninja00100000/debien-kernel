@@ -1,51 +1,36 @@
-name: Build Gentoo Kernel
+name: Build Kernel
 
 on:
   push:
     branches: [ main ]
+  workflow_dispatch:
 
 jobs:
   build:
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v3
+      - uses: actions/checkout@v3
 
       - name: Install Dependencies
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y build-essential libncurses-dev bison flex libssl-dev libelf-dev bc dwarves
+        run: sudo apt-get update && sudo apt-get install -y build-essential libncurses-dev bison flex libssl-dev libelf-dev bc
 
-      - name: Download and Extract Kernel
+      - name: Build Kernel and Modules
         run: |
-          wget https://cdn.kernel.org/pub/linux/kernel/v6.x/linux-6.18.38.tar.xz
-          tar -xf linux-6.18.38.tar.xz
-          mv linux-6.18.38 linux
-
-      - name: Setup Configuration
-        run: |
-          # تم التعديل هنا لنسخ الملف الموجود باسم 'config' إلى '.config' داخل مجلد النواة
-          cp config linux/.config
-          cd linux
+          # استخدام ملف الـ config الموجود في المستودع
           make olddefconfig
-
-      - name: Build Kernel and Headers
-        run: |
-          cd linux
+          # بناء النواة والموديولات
           make -j$(nproc)
-          make headers_install INSTALL_HDR_PATH=./kernel-headers
+          make modules_install INSTALL_MOD_PATH=./out/modules
+          # تجهيز الهيدرز
+          make headers_install INSTALL_HDR_PATH=./out/headers
+          # تجهيز ملف النواة والماب
+          cp arch/x86/boot/bzImage ./out/
+          cp System.map ./out/
+          # ضغط الموديولات لتسهيل تحميلها
+          tar -czf ./out/modules.tar.gz -C ./out/modules .
 
       - name: Prepare Artifacts
-        run: |
-          cd linux
-          tar -czf kernel-headers.tar.gz -C kernel-headers .
-
-      - name: Upload Artifacts
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v3
         with:
-          name: kernel-packages
-          path: |
-            linux/arch/x86/boot/bzImage
-            linux/System.map
-            linux/.config
-            linux/kernel-headers.tar.gz
+          name: kernel-full-package
+          path: ./out/
