@@ -1,35 +1,69 @@
-name: Build Kernel
+name: Build Gentoo Kernel with Headers
 
 on:
   push:
-    branches: [ main ]
+    branches: [ "main" ]
   workflow_dispatch:
 
 jobs:
-  build:
+  build-kernel:
     runs-on: ubuntu-latest
+
     steps:
-      - uses: actions/checkout@v4
+    - name: Checkout Repository
+      uses: actions/checkout@v4
 
-      - name: Install Dependencies
-        run: sudo apt-get update && sudo apt-get install -y build-essential libncurses-dev bison flex libssl-dev libelf-dev bc
+    - name: Install Build Dependencies
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y bc bison flex libelf-dev libssl-dev make gcc ccache xz-utils
 
-      - name: Build Kernel
-        run: |
-          # نستخدم ما هو موجود بالفعل في المستودع
-          make menuconfig
-          make -j$(nproc)
-          # تثبيت الموديولات في مجلد مؤقت
-          mkdir -p ./out
-          make modules_install INSTALL_MOD_PATH=./out
-          # نسخ الملفات الأساسية
-          cp arch/x86/boot/bzImage ./out/
-          cp System.map ./out/
-          # ضغط الموديولات
-          tar -czf ./out/modules.tar.gz -C ./out lib/modules
+    - name: Download Kernel Source
+      run: |
+        KERNEL_VER="6.12.1"
+        wget https://cdn.kernel.org/pub/linux/kernel/v6.x/linux-$KERNEL_VER.tar.xz
+        tar -xf linux-$KERNEL_VER.tar.xz
+        mv linux-$KERNEL_VER kernel-source
 
-      - name: Prepare Artifacts
-        uses: actions/upload-artifact@v4
-        with:
-          name: kernel-full-package
-          path: ./out/
+    - name: Configure Kernel
+      run: |
+        cp .config kernel-source/.config
+        cd kernel-source
+        make olddefconfig
+
+    - name: Compile Kernel and Modules
+      run: |
+        cd kernel-source
+        make -j$(nproc) bzImage
+        make -j$(nproc) modules
+
+    - name: Prepare Artifacts (Kernel, Modules & Headers)
+      run: |
+        cd kernel-source
+        # إنشاء المجلدات المؤقتة لجمع الملفات
+        mkdir -p ../kernel-artifacts/modules
+        mkdir -p ../kernel-artifacts/headers
+        
+        # 1. تثبيت وضغط الموديولز
+        make INSTALL_MOD_PATH=../kernel-artifacts/modules modules_install
+        cd ../kernel-artifacts/modules
+        tar -czf ../modules.tar.gz .
+        
+        # 2. استخراج وتثبيت ملفات الهيدرز (تحتوي على ملفات الـ API للمستخدم)
+        cd ../../kernel-source
+        make ARCH=x86 INSTALL_HDR_PATH=../kernel-artifacts/headers headers_install
+        cd ../kernel-artifacts/headers
+        tar -czf ../linux-headers.tar.gz .
+        
+        # 3. نسخ ملف النواة bzImage الرئيسي
+        cd ../../kernel-source
+        cp arch/x86/boot/bzImage ../kernel-artifacts/
+
+    - name: Upload All Artifacts
+      uses: actions/upload-artifact@v4
+      with:
+        name: gentoo-kernel-bundle
+        path: |
+          kernel-artifacts/bzImage
+          kernel-artifacts/modules.tar.gz
+          kernel-artifacts/linux-headers.tar.gz
