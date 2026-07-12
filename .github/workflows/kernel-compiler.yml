@@ -11,17 +11,6 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v3
 
-      - name: Debug and Verify File
-        run: |
-          echo "محتويات المجلد الحالي:"
-          ls -la
-          if [ -f ".config" ]; then
-            echo "تم العثور على الملف .config"
-          else
-            echo "خطأ: الملف .config غير موجود في المجلد الرئيسي!"
-            exit 1
-          fi
-
       - name: Install Dependencies
         run: |
           sudo apt-get update
@@ -35,7 +24,8 @@ jobs:
 
       - name: Setup Configuration
         run: |
-          cp .config linux/.config
+          # تم التعديل هنا لنسخ الملف الموجود باسم 'config' إلى '.config' داخل مجلد النواة
+          cp config linux/.config
           cd linux
           make olddefconfig
 
