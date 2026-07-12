@@ -9,28 +9,28 @@ jobs:
   build:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
 
       - name: Install Dependencies
         run: sudo apt-get update && sudo apt-get install -y build-essential libncurses-dev bison flex libssl-dev libelf-dev bc
 
-      - name: Build Kernel and Modules
+      - name: Build Kernel, Modules and Headers
         run: |
-          # استخدام ملف الـ config الموجود في المستودع
+          mkdir -p ./out
           make olddefconfig
-          # بناء النواة والموديولات
           make -j$(nproc)
-          make modules_install INSTALL_MOD_PATH=./out/modules
-          # تجهيز الهيدرز
-          make headers_install INSTALL_HDR_PATH=./out/headers
-          # تجهيز ملف النواة والماب
+          # تثبيت الموديولات
+          make modules_install INSTALL_MOD_PATH=./out
+          # تثبيت الهيدرز
+          make headers_install INSTALL_HDR_PATH=./out/usr
+          # نسخ الملفات الأساسية
           cp arch/x86/boot/bzImage ./out/
           cp System.map ./out/
-          # ضغط الموديولات لتسهيل تحميلها
-          tar -czf ./out/modules.tar.gz -C ./out/modules .
+          # ضغط الموديولات
+          tar -czf ./out/modules.tar.gz -C ./out lib/modules
 
       - name: Prepare Artifacts
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: kernel-full-package
           path: ./out/
