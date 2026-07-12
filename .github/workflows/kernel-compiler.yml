@@ -14,15 +14,14 @@ jobs:
       - name: Install Dependencies
         run: sudo apt-get update && sudo apt-get install -y build-essential libncurses-dev bison flex libssl-dev libelf-dev bc
 
-      - name: Build Kernel, Modules and Headers
+      - name: Build Kernel
         run: |
-          mkdir -p ./out
-          make olddefconfig
+          # نستخدم ما هو موجود بالفعل في المستودع
+          make menuconfig
           make -j$(nproc)
-          # تثبيت الموديولات
+          # تثبيت الموديولات في مجلد مؤقت
+          mkdir -p ./out
           make modules_install INSTALL_MOD_PATH=./out
-          # تثبيت الهيدرز
-          make headers_install INSTALL_HDR_PATH=./out/usr
           # نسخ الملفات الأساسية
           cp arch/x86/boot/bzImage ./out/
           cp System.map ./out/
