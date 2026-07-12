@@ -27,7 +27,8 @@ jobs:
 
     - name: Configure Kernel
       run: |
-        cp .config kernel-source/.config
+        # هنا تم التعديل ليأخذ ملف config غير المخفي وينسخه باسم .config المطلوبة للنواة
+        cp config kernel-source/.config
         cd kernel-source
         make olddefconfig
 
@@ -49,7 +50,7 @@ jobs:
         cd ../kernel-artifacts/modules
         tar -czf ../modules.tar.gz .
         
-        # 2. استخراج وتثبيت ملفات الهيدرز (تحتوي على ملفات الـ API للمستخدم)
+        # 2. استخراج وتثبيت ملفات الهيدرز
         cd ../../kernel-source
         make ARCH=x86 INSTALL_HDR_PATH=../kernel-artifacts/headers headers_install
         cd ../kernel-artifacts/headers
