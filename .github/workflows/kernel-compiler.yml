@@ -1,94 +1,56 @@
-name: Linux Kernel Compiler
+name: Build Gentoo Kernel
 
 on:
-  workflow_dispatch:
+  push:
+    branches: [ main ]
 
 jobs:
   build:
     runs-on: ubuntu-latest
-
     steps:
-    - name: Checkout Repository
-      uses: actions/checkout@v4
+      - name: Checkout code
+        uses: actions/checkout@v3
 
-    - name: Install Dependencies
-      run: |
-        sudo apt-get update
-        sudo apt-get install -y build-essential libncurses-dev bison flex libssl-dev libelf-dev bc ccache devscripts debhelper rsync
+      - name: Install Dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y build-essential libncurses-dev bison flex libssl-dev libelf-dev bc dwarves
 
-    - name: Download and Extract Kernel Source
-      run: |
-        wget https://cdn.kernel.org/pub/linux/kernel/v6.x/linux-6.12.86.tar.xz
-        tar -xf linux-6.12.86.tar.xz
+      - name: Download and Extract Kernel
+        run: |
+          # تأكد أن هذا الرابط يعمل لإصدار 6.18.38
+          wget https://cdn.kernel.org/pub/linux/kernel/v6.x/linux-6.18.38.tar.xz
+          tar -xf linux-6.18.38.tar.xz
+          mv linux-6.18.38 linux
 
-    - name: Generate Clean Config and Inject Hardware Modules
-      run: |
-        cd linux-6.12.86
-        # 1. تصفير الإعدادات وبناء كونفيج خام ونظيف جداً
-        make alldefconfig
-        
-        # إجبار بناء الحزم والـ Headers
-        scripts/config --enable CONFIG_MODULES
-        scripts/config --enable CONFIG_MODULE_UNLOAD
-        scripts/config --enable CONFIG_BLK_DEV_INITRD
+      - name: Setup Configuration
+        run: |
+          # نسخ ملف الكونفيج الذي رفعته أنت إلى مجلد المصدر
+          cp .config linux/.config
+          cd linux
+          # تهيئة الإعدادات بناءً على ملفك
+          make olddefconfig
 
-        # 2. حماية الإقلاع والتخزين (تحويلها إلى Built-in ثابت داخل النواة)
-        scripts/config --enable CONFIG_BLK_DEV_SD
-        scripts/config --enable CONFIG_BLK_DEV_NVME
-        scripts/config --enable CONFIG_SATA_AHCI
-        scripts/config --enable CONFIG_ATA
-        scripts/config --enable CONFIG_EXT4_FS
-        scripts/config --enable CONFIG_MMC
-        scripts/config --enable CONFIG_MMC_SDHCI
-        scripts/config --enable CONFIG_MMC_SDHCI_PCI
-        scripts/config --enable CONFIG_DEVTMPFS
-        scripts/config --enable CONFIG_DEVTMPFS_MOUNT
-        scripts/config --enable CONFIG_TMPFS
-        
-        # 3. تفعيل معالج وجرافيك Intel الخاص بجهازك وحذف الباقي
-        scripts/config --enable CONFIG_MCORE2
-        scripts/config --disable CONFIG_CPU_SUP_AMD
-        scripts/config --enable CONFIG_DRM
-        scripts/config --enable CONFIG_DRM_I915
-        scripts/config --enable CONFIG_DRM_FBDEV_EMULATION
-        scripts/config --disable CONFIG_DRM_AMDGPU
-        scripts/config --disable CONFIG_DRM_NOUVEAU
-        scripts/config --disable CONFIG_DRM_RADEON
-        
-        # 4. تفعيل كرت الواي فاي والصوت الخاص بـ Dell
-        scripts/config --enable CONFIG_IWLWIFI
-        scripts/config --enable CONFIG_IWLMVM
-        scripts/config --enable CONFIG_DELL_LAPTOP
-        scripts/config --enable CONFIG_DELL_WMI
-        scripts/config --enable CONFIG_SND_HDA_INTEL
-        
-        # 5. تعديلات زيادة الأداء الفائقة (Performance & Low Latency)
-        scripts/config --enable CONFIG_PREEMPT_DYNAMIC
-        scripts/config --set-val CONFIG_HZ 1000
-        scripts/config --enable CONFIG_HZ_1000
-        scripts/config --disable CONFIG_HZ_250
-        scripts/config --enable CONFIG_X86_INTEL_PSTATE
-        scripts/config --enable CONFIG_IOSCHED_BFQ
-        
-        # 6. إصلاح تواقيع ديبيان للبناء بسلام
-        scripts/config --disable SYSTEM_TRUSTED_KEYS
-        scripts/config --disable SYSTEM_REVOCATION_KEYS
-        
-        make olddefconfig
+      - name: Build Kernel and Headers
+        run: |
+          cd linux
+          # البناء باستخدام جميع أنوية المعالج المتاحة في GitHub
+          make -j$(nproc)
+          # بناء الهيدرز وتثبيتها في مسار فرعي
+          make headers_install INSTALL_HDR_PATH=./kernel-headers
 
-    - name: Compile Kernel (Full Debian Packages)
-      run: |
-        cd linux-6.12.86
-        make -j$(nproc) bindeb-pkg
+      - name: Prepare Artifacts
+        run: |
+          cd linux
+          # ضغط الهيدرز لتسهيل التحميل لاحقاً
+          tar -czf kernel-headers.tar.gz -C kernel-headers .
 
-    - name: Organize Artifacts
-      run: |
-        mkdir -p output
-        find . -maxdepth 2 -name "*.deb" -exec mv {} output/ \;
-        find .. -maxdepth 1 -name "*.deb" -exec mv {} output/ \; 2>/dev/null || true
-
-    - name: Upload Compiled Kernel
-      uses: actions/upload-artifact@v4
-      with:
-        name: custom-debian-kernel
-        path: output/
+      - name: Upload Artifacts
+        uses: actions/upload-artifact@v3
+        with:
+          name: kernel-packages
+          path: |
+            linux/arch/x86/boot/bzImage
+            linux/System.map
+            linux/.config
+            linux/kernel-headers.tar.gz
