@@ -18,35 +18,29 @@ jobs:
 
       - name: Download and Extract Kernel
         run: |
-          # تأكد أن هذا الرابط يعمل لإصدار 6.18.38
           wget https://cdn.kernel.org/pub/linux/kernel/v6.x/linux-6.18.38.tar.xz
           tar -xf linux-6.18.38.tar.xz
           mv linux-6.18.38 linux
 
       - name: Setup Configuration
         run: |
-          # نسخ ملف الكونفيج الذي رفعته أنت إلى مجلد المصدر
           cp .config linux/.config
           cd linux
-          # تهيئة الإعدادات بناءً على ملفك
           make olddefconfig
 
       - name: Build Kernel and Headers
         run: |
           cd linux
-          # البناء باستخدام جميع أنوية المعالج المتاحة في GitHub
           make -j$(nproc)
-          # بناء الهيدرز وتثبيتها في مسار فرعي
           make headers_install INSTALL_HDR_PATH=./kernel-headers
 
       - name: Prepare Artifacts
         run: |
           cd linux
-          # ضغط الهيدرز لتسهيل التحميل لاحقاً
           tar -czf kernel-headers.tar.gz -C kernel-headers .
 
       - name: Upload Artifacts
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: kernel-packages
           path: |
